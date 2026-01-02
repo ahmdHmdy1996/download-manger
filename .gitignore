@@ -1,0 +1,33 @@
+# OS
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Node / Build
+node_modules/
+dist/
+out/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# App Data
+downloads/
+bin/
+*.tmp
+*.temp
+*.chunks/
+
+# Test Artifacts
+test-output.txt
+*.mp4
+*-player-script.js

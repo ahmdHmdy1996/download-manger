@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Download Manager</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      /* Prevent flash during load */
+      body {
+        opacity: 0;
+        transition: opacity 0.2s ease-in;
+      }
+      body.loaded {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <svg class="sidebar-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <h1>Downloads</h1>
+        </div>
+
+        <nav class="sidebar-nav">
+          <button class="nav-item active" data-filter="all">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>All</span>
+          </button>
+
+          <button class="nav-item" data-filter="downloading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="8 17 12 21 16 17"></polyline>
+              <line x1="12" y1="12" x2="12" y2="21"></line>
+              <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
+            </svg>
+            <span>Downloading</span>
+            <span class="badge" id="downloadingBadge">0</span>
+          </button>
+
+          <button class="nav-item" data-filter="completed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>Completed</span>
+            <span class="badge" id="completedBadge">0</span>
+          </button>
+
+          <div class="nav-divider"></div>
+
+          <button class="nav-item" id="settingsNavBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 1v6m0 6v6"></path>
+              <path d="M17 12h6M5 12h6"></path>
+            </svg>
+            <span>Settings</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Add Download Section -->
+        <div class="add-download-section">
+          <div class="input-group">
+            <input
+              type="text"
+              id="urlInput"
+              placeholder="Enter URL to download..."
+              class="url-input"
+            />
+            <button id="addDownloadBtn" class="btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Download
+            </button>
+          </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+          <div class="stat-item">
+            <span class="stat-label">Active:</span>
+            <span class="stat-value" id="activeCount">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Completed:</span>
+            <span class="stat-value" id="completedCount">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Speed:</span>
+            <span class="stat-value" id="totalSpeed">0 KB/s</span>
+          </div>
+        </div>
+
+        <!-- Downloads List -->
+        <div class="downloads-container">
+          <div id="downloadsList" class="downloads-list">
+            <!-- Downloads will be added here dynamically -->
+          </div>
+
+          <div id="emptyState" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <h3>No downloads yet</h3>
+            <p>Add a download URL above to get started</p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button class="close-btn" id="closeSettingsBtn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-group">
+            <label for="downloadPathInput">Download Location:</label>
+            <div class="path-input-group">
+              <input type="text" id="downloadPathInput" readonly />
+              <button id="browsePathBtn" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label for="maxConnectionsInput">Max Connections per Download:</label>
+            <input
+              type="number"
+              id="maxConnectionsInput"
+              min="1"
+              max="16"
+              value="8"
+            />
+          </div>
+
+          <div class="setting-group">
+            <label for="speedLimitInput">Speed Limit (KB/s, 0 = unlimited):</label>
+            <input type="number" id="speedLimitInput" min="0" value="0" />
+          </div>
+
+          <div class="setting-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="autoStartInput" checked />
+              <span>Auto-start downloads</span>
+            </label>
+          </div>
+
+          <div class="settings-divider"></div>
+          <h3 class="settings-section-title">Notifications</h3>
+
+          <div class="setting-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="notificationsEnabledInput" checked />
+              <span>Enable notifications</span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="notificationSoundInput" checked />
+              <span>Play notification sound</span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Notify on:</label>
+            <label class="checkbox-label" style="margin-left: 1rem;">
+              <input type="checkbox" id="notifyOnCompleteInput" checked />
+              <span>Download completed</span>
+            </label>
+            <label class="checkbox-label" style="margin-left: 1rem;">
+              <input type="checkbox" id="notifyOnErrorInput" checked />
+              <span>Download failed</span>
+            </label>
+            <label class="checkbox-label" style="margin-left: 1rem;">
+              <input type="checkbox" id="notifyOnPauseInput" />
+              <span>Download paused</span>
+            </label>
+            <label class="checkbox-label" style="margin-left: 1rem;">
+              <input type="checkbox" id="notifyOnResumeInput" />
+              <span>Download resumed</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="saveSettingsBtn" class="btn-primary">
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dragOverlay" class="drag-overlay">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <h2>Drop Link Here</h2>
+      <p>Release to start downloading</p>
+    </div>
+
+    <script defer src="utils.js"></script>
+    <script defer src="renderer.js"></script>
+    <script defer src="sidebar.js"></script>
+    <script defer src="app.js"></script>
+  </body>
+</html>
