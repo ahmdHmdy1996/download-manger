@@ -27,6 +27,11 @@ bin/
 *.temp
 *.chunks/
 
+# Keep assets
+!assets/
+!assets/*.ico
+!assets/*.png
+
 # Test Artifacts
 test-output.txt
 *.mp4
