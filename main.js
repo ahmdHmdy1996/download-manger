@@ -22,6 +22,8 @@ if (!global.File) {
   }
 }
 
+const { ensureNativeHostRegistered } = require("./src/core/setupNativeHost");
+
 const DownloadManager = require("./src/downloadManager");
 const Store = require("electron-store");
 
@@ -246,6 +248,7 @@ function createPopupWindow() {
 }
 
 app.whenReady().then(() => {
+  ensureNativeHostRegistered();
   createWindow();
   createTray();
   setupNativeMessagingServer();
@@ -322,6 +325,22 @@ ipcMain.handle("cancel-download", async (event, downloadId) => {
 ipcMain.handle("remove-download", async (event, downloadId) => {
   downloadManager.removeDownload(downloadId);
   return { success: true };
+});
+
+ipcMain.handle("edit-download-url", async (event, downloadId, newUrl) => {
+  const success = downloadManager.updateDownloadUrl(downloadId, newUrl);
+  if (success) {
+    // Notify UI about update (simplest is to just send 'download-added' or similar event to force re-render,
+    // or we can rely on next progress/status update if we trigger one,
+    // but explicitly sending the updated object is safer)
+    const download = downloadManager.downloads.get(downloadId);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Send a specific update event or just repurpose one
+      mainWindow.webContents.send("download-url-updated", downloadId, newUrl);
+    }
+    return { success: true };
+  }
+  return { success: false, error: "Download not found" };
 });
 
 ipcMain.handle("open-file", async (event, downloadId) => {

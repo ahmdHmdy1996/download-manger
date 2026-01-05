@@ -1,5 +1,6 @@
 let port = null;
 
+// --- Native Messaging ---
 function connectToNative() {
   try {
     port = chrome.runtime.connectNative("com.downloadmanager.native");
@@ -7,7 +8,6 @@ function connectToNative() {
     port.onDisconnect.addListener(() => {
       console.log("Disconnected from native host");
       port = null;
-      // Try to reconnect after a delay if needed, or wait for next action
     });
 
     port.onMessage.addListener((msg) => {
@@ -31,21 +31,50 @@ function sendToNative(message) {
   }
 }
 
-// Handle Downloads
+// --- Video Detection Storage ---
+// Map<tabId, Set<string>> where string is the full JSON stringified video object
+// We use Set to prevent duplicates easily, but store objects as strings
+const detectedVideos = new Map();
+
+function addVideo(tabId, videoInfo) {
+  if (!detectedVideos.has(tabId)) {
+    detectedVideos.set(tabId, new Set());
+  }
+
+  const tabVideos = detectedVideos.get(tabId);
+  const videoStr = JSON.stringify(videoInfo);
+
+  if (!tabVideos.has(videoStr)) {
+    tabVideos.add(videoStr);
+    updateBadge(tabId);
+  }
+}
+
+function getVideos(tabId) {
+  if (!detectedVideos.has(tabId)) return [];
+  return Array.from(detectedVideos.get(tabId)).map((s) => JSON.parse(s));
+}
+
+function updateBadge(tabId) {
+  const count = detectedVideos.has(tabId) ? detectedVideos.get(tabId).size : 0;
+
+  const text = count > 0 ? count.toString() : "";
+  chrome.action.setBadgeText({ text: text, tabId: tabId });
+  chrome.action.setBadgeBackgroundColor({ color: "#4688F1", tabId: tabId });
+}
+
+// --- Event Listeners ---
+
+// 1. Handle regular downloads (keep existing logic)
 chrome.downloads.onCreated.addListener((downloadItem) => {
-  // Ignore downloads that are already cancelled or handled
   if (downloadItem.state !== "in_progress") return;
 
-  // We want to cancel the browser download and send it to our app
   chrome.downloads.cancel(downloadItem.id, () => {
-    if (chrome.runtime.lastError) {
-      console.error("Failed to cancel download:", chrome.runtime.lastError);
-    } else {
+    if (!chrome.runtime.lastError) {
       console.log(
         "Download cancelled in Chrome, sending to app:",
         downloadItem.url
       );
-
       const message = {
         type: "NEW_DOWNLOAD",
         url: downloadItem.url,
@@ -53,13 +82,25 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
         fileSize: downloadItem.fileSize,
         mime: downloadItem.mime,
       };
-
       sendToNative(message);
     }
   });
 });
 
-// Video Sniffing (Video/Audio detection)
+// 2. Clear videos on tab update/refresh
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "loading") {
+    detectedVideos.delete(tabId);
+    updateBadge(tabId);
+  }
+});
+
+// 3. Clear videos on tab remove
+chrome.tabs.onRemoved.addListener((tabId) => {
+  detectedVideos.delete(tabId);
+});
+
+// 4. Video Sniffing
 const VIDEO_EXTENSIONS = [
   ".mp4",
   ".m3u8",
@@ -69,7 +110,6 @@ const VIDEO_EXTENSIONS = [
   ".avi",
   ".mkv",
 ];
-const recentUrls = new Set();
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -80,31 +120,42 @@ chrome.webRequest.onBeforeRequest.addListener(
 
     // Check extensions
     const isVideo = VIDEO_EXTENSIONS.some((ext) => {
-      // Simple check: url ends with ext or ext? (query params)
-      // Also ignore small segments like .ts to reduce spam unless it's the only thing
       if (ext === ".ts" && !lowerUrl.includes(".m3u8")) return false;
       return lowerUrl.includes(ext);
     });
 
     if (isVideo) {
-      // Prevent duplicate notifications for the same URL
-      if (recentUrls.has(url)) return;
+      // We need the tabId to associate the video with a specific tab
+      const tabId = details.tabId;
+      if (tabId === -1) return; // Ignore non-tab requests
 
-      // Also basic debounce/flood protection (same domain/file within 2 seconds?)
-      // Let's just track exact URL for now, but clear periodically
-      recentUrls.add(url);
-      setTimeout(() => recentUrls.delete(url), 10000); // 10 seconds memory
+      console.log("Video detected:", url, "Tab:", tabId);
 
-      console.log("Video detected:", url);
-
-      const message = {
-        type: "VIDEO_DETECTED",
+      const videoInfo = {
         url: url,
+        filename: url.split("/").pop().split("?")[0] || "video",
         referrer: details.initiator || "unknown",
       };
 
-      sendToNative(message);
+      addVideo(tabId, videoInfo);
     }
   },
   { urls: ["<all_urls>"] }
 );
+
+// 5. Handle messages from Popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "GET_VIDEOS") {
+    const videos = getVideos(message.tabId);
+    sendResponse({ videos: videos });
+  } else if (message.action === "DOWNLOAD_VIDEO") {
+    console.log("Downloading video from popup:", message.video);
+
+    const nativeMsg = {
+      type: "VIDEO_DETECTED", // Re-using the message type the app expects
+      url: message.video.url,
+      referrer: message.video.referrer,
+    };
+    sendToNative(nativeMsg);
+  }
+});

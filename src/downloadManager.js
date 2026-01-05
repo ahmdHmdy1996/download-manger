@@ -141,6 +141,30 @@ class DownloadManager extends EventEmitter {
     }
   }
 
+  updateDownloadUrl(id, newUrl) {
+    const task = this.downloads.get(id);
+    if (task) {
+      // Logic: Update URL only. If downloading, it needs to be stopped first.
+      // We assume UI handles pausing first, or we enforce it.
+      if (task.status === "downloading") {
+        task.pause();
+      }
+
+      console.log(`Updating URL for task ${id} from ${task.url} to ${newUrl}`);
+      task.url = newUrl;
+
+      // If error, reset to 'paused' or 'waiting' so it can be retried
+      if (task.status === "error") {
+        task.status = "paused";
+        task.error = null;
+      }
+
+      this.saveDownloads();
+      return true;
+    }
+    return false;
+  }
+
   getAllDownloads() {
     return Array.from(this.downloads.values()).map((task) => ({
       id: task.id,

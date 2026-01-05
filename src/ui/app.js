@@ -282,6 +282,36 @@ class DownloadManagerUI {
           await ipcRenderer.invoke("remove-download", downloadId);
           this.removeDownloadFromUI(downloadId);
           break;
+        case "edit":
+          const download = this.downloads.get(downloadId);
+          const currentUrl = download ? download.url : "";
+          // Simple prompt for now. Ideally use a custom modal for better UI.
+          // Since this is in renderer process, we can use standard window.prompt or our own modal
+          // standard prompt is easiest for now.
+          const newUrl = prompt("Enter new URL:", currentUrl);
+
+          if (newUrl && newUrl !== currentUrl) {
+            if (!Utils.isValidUrl(newUrl)) {
+              Utils.showNotification("Invalid URL", "error");
+              return;
+            }
+            const result = await ipcRenderer.invoke(
+              "edit-download-url",
+              downloadId,
+              newUrl
+            );
+            if (result.success) {
+              Utils.showNotification("URL updated successfully", "success");
+              // Updates will come back via events, but we can optimistically update UI if needed
+              // The main process will send 'download-url-updated', let's listen for that or similar.
+            } else {
+              Utils.showNotification(
+                `Failed to update URL: ${result.error}`,
+                "error"
+              );
+            }
+          }
+          break;
         default:
           console.warn(`Unknown action: ${action}`);
       }
