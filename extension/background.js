@@ -69,6 +69,7 @@ const VIDEO_EXTENSIONS = [
   ".avi",
   ".mkv",
 ];
+const recentUrls = new Set();
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -80,15 +81,21 @@ chrome.webRequest.onBeforeRequest.addListener(
     // Check extensions
     const isVideo = VIDEO_EXTENSIONS.some((ext) => {
       // Simple check: url ends with ext or ext? (query params)
+      // Also ignore small segments like .ts to reduce spam unless it's the only thing
+      if (ext === ".ts" && !lowerUrl.includes(".m3u8")) return false;
       return lowerUrl.includes(ext);
     });
 
     if (isVideo) {
+      // Prevent duplicate notifications for the same URL
+      if (recentUrls.has(url)) return;
+
+      // Also basic debounce/flood protection (same domain/file within 2 seconds?)
+      // Let's just track exact URL for now, but clear periodically
+      recentUrls.add(url);
+      setTimeout(() => recentUrls.delete(url), 10000); // 10 seconds memory
+
       console.log("Video detected:", url);
-      // Optional: don't cancel automatically, just notify user or app?
-      // User request said: "Capture ... autometically"
-      // But for videos on pages, we usually just want to 'sniff' the link, not block the playback.
-      // So we won't cancel webRequest here, just send the link.
 
       const message = {
         type: "VIDEO_DETECTED",

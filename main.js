@@ -33,7 +33,7 @@ let popupWindow;
 let tray;
 
 // Notification helper function
-function showNotification(title, body, type = "info") {
+function showNotification(title, body, type = "info", payload = null) {
   const notificationSettings = store.get("notificationSettings") || {
     enabled: true,
     sound: true,
@@ -69,9 +69,31 @@ function showNotification(title, body, type = "info") {
 
   // Handle notification click
   notification.on("click", () => {
+    console.log("Notification clicked!", { title, type, payload });
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
+
+      // If we have a payload (like a video URL), trigger an action
+      if (payload && payload.action === "download" && payload.url) {
+        console.log(
+          "Triggering download action from notification:",
+          payload.url
+        );
+        // Trigger add-download
+        const savePath = store.get("downloadPath") || app.getPath("downloads");
+        downloadManager
+          .addDownload(payload.url, savePath, null, {
+            headers: {
+              Referer: payload.referrer || "",
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+          })
+          .then(() => {
+            createPopupWindow(); // Show the popup
+          });
+      }
     }
   });
 }
@@ -503,6 +525,9 @@ function setupNativeMessagingServer() {
   });
 }
 
+// Basic in-memory debounce for video notifications
+const recentVideoNotifications = new Map();
+
 function handleNativeMessage(message) {
   console.log("Received native message:", message);
 
@@ -513,7 +538,13 @@ function handleNativeMessage(message) {
     // We can't await here easily without making this async, but addDownload is async.
     // It's fine to just trigger it.
     downloadManager
-      .addDownload(message.url, savePath, message.filename)
+      .addDownload(message.url, savePath, message.filename, {
+        headers: {
+          Referer: message.referrer || "",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      })
       .then((downloadId) => {
         showNotification(
           "Download Started ⬇️",
@@ -550,9 +581,36 @@ function handleNativeMessage(message) {
       });
   } else if (message.type === "VIDEO_DETECTED") {
     console.log("Video Sniffed:", message.url);
-    // You might want to auto-download or asking user
-    // For now, let's just notify
-    showNotification("Video Detected 📹", "Found a video stream on this page!");
+
+    // SERVER-SIDE DEBOUNCE LOGIC
+    // Use URL without query params as key to deduplicate standard video chunks/tokens
+    const cleanKey = message.url.split("?")[0];
+    const now = Date.now();
+
+    if (recentVideoNotifications.has(cleanKey)) {
+      const lastTime = recentVideoNotifications.get(cleanKey);
+      // Ignore if seen within last 20 seconds
+      if (now - lastTime < 20000) {
+        console.log(
+          "Duplicate video notification filtered (Server-Side):",
+          cleanKey
+        );
+        return;
+      }
+    }
+    recentVideoNotifications.set(cleanKey, now);
+
+    // Notify with action payload including referrer
+    showNotification(
+      "Video Detected 📹",
+      "Click to download this video!",
+      "info",
+      {
+        action: "download",
+        url: message.url,
+        referrer: message.referrer,
+      }
+    );
 
     // Optional: Add to a "Grabber" list in UI or Popup
     if (mainWindow && !mainWindow.isDestroyed()) {

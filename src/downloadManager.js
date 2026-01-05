@@ -80,7 +80,7 @@ class DownloadManager extends EventEmitter {
     });
   }
 
-  async addDownload(url, savePath, customFilename = null) {
+  async addDownload(url, savePath, customFilename = null, options = {}) {
     const id = crypto.randomBytes(16).toString("hex");
 
     // Initial data
@@ -89,6 +89,7 @@ class DownloadManager extends EventEmitter {
       url,
       savePath,
       filename: customFilename, // Might be null initially
+      headers: options.headers || {},
       status: "waiting",
       startTime: Date.now(),
     };
