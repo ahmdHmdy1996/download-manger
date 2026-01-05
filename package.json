@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "build": "electron-builder"
+    "generate-icon": "node convert-icon.js",
+    "build": "npm run generate-icon && electron-builder"
   },
   "keywords": [
     "download",
@@ -25,7 +26,8 @@
   },
   "devDependencies": {
     "electron": "^27.0.0",
-    "electron-builder": "^24.6.4"
+    "electron-builder": "^24.6.4",
+    "png-to-ico": "^3.0.1"
   },
   "build": {
     "appId": "com.downloadmanager.app",
