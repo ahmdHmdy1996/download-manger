@@ -13,7 +13,7 @@
     "manager",
     "electron"
   ],
-  "author": "",
+  "author": "Download Manager <support@example.com>",
   "license": "MIT",
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
