@@ -1,20 +1,26 @@
 const fs = require("fs");
-const pngToIco = require("png-to-ico");
+const path = require("path");
 
-const inputFile = "assets/icon.png";
-const outputFile = "assets/icon.ico";
+const inputFile = path.join(__dirname, "assets", "icon.png");
+const outputFile = path.join(__dirname, "assets", "icon.ico");
 
 if (!fs.existsSync(inputFile)) {
   console.error(`Input file not found: ${inputFile}`);
   process.exit(1);
 }
 
-pngToIco(inputFile)
-  .then((buf) => {
+(async () => {
+  try {
+    // Dynamic import for ESM compatibility
+    const pngToIco = (await import("png-to-ico")).default;
+
+    // png-to-ico might return a Promise that resolves to a buffer
+    const buf = await pngToIco(inputFile);
+
     fs.writeFileSync(outputFile, buf);
     console.log(`Successfully converted ${inputFile} to ${outputFile}`);
-  })
-  .catch((err) => {
+  } catch (err) {
     console.error("Error converting icon:", err);
     process.exit(1);
-  });
+  }
+})();
