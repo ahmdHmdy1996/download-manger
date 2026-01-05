@@ -8,6 +8,7 @@ const {
   Notification,
 } = require("electron");
 const path = require("path");
+const net = require("net");
 
 // Polyfill File for Node 18 (Electron 27)
 if (!global.File) {
@@ -225,6 +226,7 @@ function createPopupWindow() {
 app.whenReady().then(() => {
   createWindow();
   createTray();
+  setupNativeMessagingServer();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -248,6 +250,28 @@ ipcMain.handle("add-download", async (event, url, filename) => {
       savePath,
       filename
     );
+
+    // Notify UI (for manual adds too!)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const download = downloadManager.downloads.get(downloadId);
+      if (download) {
+        const downloadData = {
+          id: download.id,
+          url: download.url,
+          filename: download.filename,
+          totalSize: download.totalSize,
+          downloadedSize: download.downloadedSize,
+          status: download.status,
+          speed: download.speed || 0,
+          percentage:
+            download.totalSize > 0
+              ? (download.downloadedSize / download.totalSize) * 100
+              : 0,
+        };
+        mainWindow.webContents.send("download-added", downloadData);
+      }
+    }
+
     return { success: true, downloadId };
   } catch (error) {
     return { success: false, error: error.message };
@@ -424,3 +448,115 @@ downloadManager.on("error", (downloadId, error) => {
     );
   }
 });
+
+// --- Native Messaging Integration ---
+
+function setupNativeMessagingServer() {
+  const server = net.createServer((socket) => {
+    console.log("Native host connected");
+
+    let buffer = Buffer.alloc(0);
+    let expectedLength = null;
+
+    socket.on("data", (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+
+      while (true) {
+        if (expectedLength === null) {
+          if (buffer.length >= 4) {
+            expectedLength = buffer.readUInt32LE(0);
+            buffer = buffer.subarray(4); // Consume header
+          } else {
+            break; // Not enough data for header
+          }
+        }
+
+        if (expectedLength !== null) {
+          if (buffer.length >= expectedLength) {
+            const messageBuffer = buffer.subarray(0, expectedLength);
+            buffer = buffer.subarray(expectedLength); // Consume message
+
+            // Process Message
+            try {
+              const jsonStr = messageBuffer.toString("utf8");
+              const message = JSON.parse(jsonStr);
+              handleNativeMessage(message);
+            } catch (e) {
+              console.error("Failed to parse native message", e);
+            }
+
+            expectedLength = null; // Reset for next message
+          } else {
+            break; // Not enough data for body
+          }
+        }
+      }
+    });
+
+    socket.on("error", (err) => {
+      console.error("Native Messaging Socket Error:", err);
+    });
+  });
+
+  server.listen(33445, "127.0.0.1", () => {
+    console.log("Native Messaging Server listening on port 33445");
+  });
+}
+
+function handleNativeMessage(message) {
+  console.log("Received native message:", message);
+
+  if (message.type === "NEW_DOWNLOAD") {
+    // Add the download
+    const savePath = store.get("downloadPath") || app.getPath("downloads");
+
+    // We can't await here easily without making this async, but addDownload is async.
+    // It's fine to just trigger it.
+    downloadManager
+      .addDownload(message.url, savePath, message.filename)
+      .then((downloadId) => {
+        showNotification(
+          "Download Started ⬇️",
+          `Started downloading ${message.filename}`
+        );
+
+        // Notify main window to update list
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const download = downloadManager.downloads.get(downloadId);
+          if (download) {
+            const downloadData = {
+              id: download.id,
+              url: download.url,
+              filename: download.filename,
+              totalSize: download.totalSize,
+              downloadedSize: download.downloadedSize,
+              status: download.status,
+              speed: download.speed || 0,
+              percentage:
+                download.totalSize > 0
+                  ? (download.downloadedSize / download.totalSize) * 100
+                  : 0,
+            };
+            mainWindow.webContents.send("download-added", downloadData);
+          }
+        }
+
+        // Show popup
+        createPopupWindow();
+      })
+
+      .catch((err) => {
+        console.error("Failed to start download from native message:", err);
+      });
+  } else if (message.type === "VIDEO_DETECTED") {
+    console.log("Video Sniffed:", message.url);
+    // You might want to auto-download or asking user
+    // For now, let's just notify
+    showNotification("Video Detected 📹", "Found a video stream on this page!");
+
+    // Optional: Add to a "Grabber" list in UI or Popup
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("video-detected", message);
+    }
+  }
+}

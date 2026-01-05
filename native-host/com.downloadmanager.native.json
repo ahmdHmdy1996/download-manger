@@ -1,0 +1,7 @@
+{
+  "name": "com.downloadmanager.native",
+  "description": "Download Manager Native Host",
+  "path": "d:\\download app\\native-host\\run-host.bat",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://jgimggidagjblnfhegekgpmmkihjlipg/"]
+}

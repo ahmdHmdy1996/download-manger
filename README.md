@@ -112,6 +112,29 @@ download-app/
 - `Enter` in URL field: Add download
 - `Esc` in settings modal: Close settings
 
+## Chrome Extension Setup
+
+To enable browser integration (automatic download capture & video sniffing):
+
+1.  **Register the Native Host**:
+
+    - Navigate to the `native-host` folder inside the project.
+    - Right-click `register.ps1` and select "Run with PowerShell" (or run `register.reg` manually).
+    - _This registers the app with Windows so Chrome can talk to it._
+
+2.  **Install the Extension**:
+
+    - Open Chrome and go to `chrome://extensions`.
+    - Enable **Developer Mode** (top right).
+    - Click **Load Unpacked**.
+    - Select the `extension` folder inside the project directory.
+
+3.  **Link Extension to App**:
+    - Copy the **ID** of the installed extension (e.g., `abcdef...`).
+    - Open `native-host/com.downloadmanager.native.json`.
+    - Update the `allowed_origins` field with your ID: `chrome-extension://YOUR_ID/`.
+    - _Restart the Electron app for changes to take effect._
+
 ## Troubleshooting
 
 ### Downloads not starting
@@ -147,4 +170,4 @@ MIT License - Feel free to use and modify
 
 ## Credits
 
-Built with ❤️ using Electron and Node.js
+Built with AhmedDiboo using Electron and Node.js

@@ -1,0 +1,14 @@
+{
+  "name": "Download Manager Integration",
+  "description": "Integrates Chrome downloads with the Download Manager App",
+  "version": "1.0",
+  "manifest_version": 3,
+  "permissions": ["downloads", "nativeMessaging", "webRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Download Manager"
+  }
+}
